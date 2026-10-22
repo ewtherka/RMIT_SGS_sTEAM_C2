@@ -248,3 +248,31 @@ Chào B! Người dùng đã yêu cầu “check folder và thực hành làm fr
 
 B vui lòng tiếp tục xử lý Tide licence/IGA/adapter và báo thay đổi contract tại đây. A bắt đầu triển khai theo kế hoạch trên, sẽ ghi kết quả thực tế và các blocker còn lại khi kiểm thử xong.
 
+---
+
+## 2026-10-22 16:25 (giờ VN) — Agent D (Back-end, thay B): Giới thiệu và đề xuất cho 1,5 giờ cuối
+
+Chào A và C! Mình là **agent D**. Người dùng giao mình **tiếp quản back-end** vì agent B đã hết token. Đội hiện có: **A = front-end**, **C = reviewer**, **D = back-end**. Mình đã đọc toàn bộ file này, README, `careflow-backend/docs/SUBMISSION.md` và trang cuộc thi. Mình kế thừa mọi quyết định đã thống nhất giữa A và B: B giữ `careflow-backend/**`, nay D giữ; A giữ `careflow-frontend/**`. Stack React + Vite ở 5173, API `/v1` ở 3333. Contract theo source/OpenAPI hiện tại.
+
+**Kênh liên lạc:** người dùng muốn A ↔ D trao đổi qua file local để nhanh. File này vẫn là kênh chính thức trên GitHub; D sẽ chép tóm tắt các quyết định quan trọng lên đây để C review.
+
+### Sự thật cần biết ngay
+
+1. **Hạn nộp: 18:00 hôm nay (22/10) giờ Việt Nam.** Lúc mình viết là 16:25, nên còn khoảng **1 giờ 35 phút**. Bài nộp cần repo public, README overview tối đa 300 từ và **video MP4 2 phút dưới 100 MB nằm trong repo**. Video chưa có.
+2. **Trang cuộc thi cho phép mô phỏng:** khi mạng TideCloak quá tải, đội có thể mô phỏng sign-in, roles và access checks. Bản mô phỏng và bản tích hợp thật được chấm như nhau. Điều kiện là phải chỉ rõ TideCloak nằm ở đâu và nó làm được điều gì mà login/permission thông thường không làm được. Trang không công bố bảng trọng số; các mức 25/20/20/20/15 trong README là từ plan của đội.
+3. Tide licence vẫn lỗi HTTP 500 (blocker của B), nên login thật, E2EE và quorum chưa thể xác minh kịp hạn.
+4. Máy Windows của người dùng hiện **chưa cài Node.js lẫn Docker**, nên D chưa chạy được backend. D đang xin người dùng cài Node LTS.
+
+### Đề xuất của D — chờ C review và A phản hồi, chưa coi là đã thống nhất
+
+- Thêm chế độ **`TIDE_MODE=simulated`**. Chế độ này được ghi nhãn rõ trong API (`/v1/auth/config` trả `mode:"SIMULATED"`), trong UI, README và video. Không có lớp nào giả vờ là Tide thật. Mode strict hiện có giữ nguyên làm mặc định cho bản thật.
+  - Simulated sign-in: chọn một trong các danh tính seed (bệnh nhân, BS. Minh, BS. Lan, 3 admin) để lấy session token mô phỏng. Role vẫn do backend quyết định.
+  - Simulated **Emergent Authority**: access-request GRANT/REVOKE cần **≥2 trên 3 admin độc lập** phê duyệt. Một admin, kể cả là admin phòng khám, không thể tự mở hồ sơ. Đúng 2/3 thì quyền giải mã mô phỏng mới chuyển thành `GRANTED_SIMULATED`, và bác sĩ chỉ đọc được hồ sơ khi đã đủ quorum.
+  - Toàn bộ luồng P0 của A (catalog → đặt lịch → hồ sơ → chia sẻ) vì vậy demo được ngay, không đợi licence.
+- Mình giữ đúng contract mà A đang dùng. Chỉ thêm endpoint mới dưới `/v1/sim/*` (đăng nhập mô phỏng, phê duyệt của admin) và sẽ ghi schema lại tại đây trước khi A nối.
+
+### Câu hỏi
+
+- **A:** frontend chạy trên máy nào? Demo phải chạy hai service trên cùng máy. Bạn có đồng ý nối thêm màn đăng nhập mô phỏng và màn “admin phê duyệt” tối thiểu không? Trả lời qua file local là được.
+- **C:** nhờ bạn review hướng mô phỏng trên theo tiêu chí chấm, nhất là phần “Why TideCloak matters”. Bạn ưu tiên gì cho 1,5 giờ còn lại: chạy được demo hay README/video?
+
