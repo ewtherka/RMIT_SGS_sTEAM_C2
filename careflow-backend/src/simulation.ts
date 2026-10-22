@@ -211,50 +211,96 @@ export class SimFabric {
     });
   }
   // Who may decrypt: the patient (User policy), the authoring doctor, or a doctor granted by quorum.
+  // Anyone else without a relationship to the record gets 404, so record existence does not leak.
   private decision(p: Principal, recordId: string) {
     const u = this.access.user(p);
     const r = this.db.get('SELECT * FROM records WHERE id=?', recordId) ?? missing();
     this.access.clinic(p, r.clinic_id);
-    const patient =
-      hasRole(p, 'patient') && Boolean(this.db.get('SELECT 1 FROM patients WHERE id=? AND user_id=?', r.patient_id, u.id));
+    const owner =
+      hasRole(p, 'patient') &&
+      Boolean(this.db.get('SELECT 1 FROM patients WHERE id=? AND user_id=?', r.patient_id, u.id));
     const doctor = hasRole(p, 'doctor') ? this.db.get('SELECT id FROM doctors WHERE user_id=?', u.id) : undefined;
     const author = Boolean(doctor) && r.author_id === u.id;
     const granted =
-      Boolean(doctor) && Boolean(this.db.get('SELECT 1 FROM sim_grants WHERE record_id=? AND doctor_id=?', r.id, doctor!.id));
-    const reason = patient ? 'PATIENT_USER_POLICY' : author ? 'AUTHOR_CARE_TEAM' : granted ? 'QUORUM_GRANT' : null;
-    return { r, reason };
+      Boolean(doctor) &&
+      Boolean(this.db.get('SELECT 1 FROM sim_grants WHERE record_id=? AND doctor_id=?', r.id, doctor!.id));
+    const careRelation =
+      Boolean(doctor) &&
+      Boolean(
+        this.db.get(
+          "SELECT 1 FROM appointments WHERE patient_id=? AND doctor_id=? AND status IN ('CONFIRMED','CHECKED_IN','IN_PROGRESS')",
+          r.patient_id,
+          doctor!.id,
+        ),
+      );
+    const admin = hasRole(p, 'admin');
+    if (!owner && !author && !granted && !careRelation && !admin) missing();
+    const reason = owner ? 'PATIENT_USER_POLICY' : author ? 'AUTHOR_CARE_TEAM' : granted ? 'QUORUM_GRANT' : null;
+    return { r, reason, owner, admin };
   }
   decrypt(p: Principal, recordId: string) {
     this.tide.ensure();
     const { r, reason } = this.decision(p, recordId);
     if (r.state !== 'RELEASED' || !r.ciphertext) missing();
-    if (!reason)
+    if (!reason) {
+      // Denials are logged too, so the patient can see who tried to open the record.
+      this.db.audit(p.user!.id, r.clinic_id, 'SIM_TIDE_DECRYPT_DENIED', r.id, { roles: p.roles });
       throw new ApiError(
         403,
         'TIDE_POLICY_DENIED',
-        'Mạng Tide (mô phỏng) từ chối giải mã: chưa có quyền được ≥2 admin độc lập phê duyệt.',
+        hasRole(p, 'admin')
+          ? 'Mạng Tide (mô phỏng) từ chối: quyền admin không bao gồm quyền đọc hồ sơ bệnh nhân.'
+          : 'Mạng Tide (mô phỏng) từ chối giải mã: chưa có quyền được ≥2 admin độc lập phê duyệt.',
       );
+    }
     this.db.audit(p.user!.id, r.clinic_id, 'SIM_TIDE_DECRYPT', r.id, { reason });
-    return { recordId: r.id, plaintext: this.tide.decrypt(r.id, r.ciphertext), allowedBy: reason, enforcedBy: SIM_LABEL };
+    return {
+      recordId: r.id,
+      plaintext: this.tide.decrypt(r.id, r.ciphertext),
+      allowedBy: reason,
+      enforcedBy: SIM_LABEL,
+    };
   }
   status(p: Principal, recordId: string) {
     this.tide.ensure();
-    const { r, reason } = this.decision(p, recordId);
-    const requests = this.db
-      .all(
-        'SELECT q.*,r.title,d.display_name AS doctor_name FROM access_requests q JOIN records r ON r.id=q.record_id JOIN doctors d ON d.id=q.doctor_id WHERE q.record_id=? ORDER BY q.created_at DESC LIMIT 50',
-        r.id,
-      )
-      .map((x) => this.presentRequest(x));
+    const { r, reason, owner, admin } = this.decision(p, recordId);
+    const full = owner || admin;
     return {
       recordId: r.id,
       canDecrypt: Boolean(reason) && r.state === 'RELEASED',
       allowedBy: reason,
-      grantedDoctorIds: this.db.all('SELECT doctor_id FROM sim_grants WHERE record_id=?', r.id).map((x) => x.doctor_id),
-      requests: hasRole(p, 'patient', 'admin') ? requests : [],
+      // Only the owner and governing admins see who else holds or requested access.
+      grantedDoctorIds: full
+        ? this.db.all('SELECT doctor_id FROM sim_grants WHERE record_id=?', r.id).map((x) => x.doctor_id)
+        : [],
+      requests: full
+        ? this.db
+            .all(
+              'SELECT q.*,r.title,d.display_name AS doctor_name FROM access_requests q JOIN records r ON r.id=q.record_id JOIN doctors d ON d.id=q.doctor_id WHERE q.record_id=? ORDER BY q.created_at DESC LIMIT 50',
+              r.id,
+            )
+            .map((x) => this.presentRequest(x))
+        : [],
       quorum: QUORUM,
       enforcedBy: SIM_LABEL,
     };
+  }
+  // Transparency log: every share request, admin approval, quorum commit and decrypt attempt on a record.
+  accessLog(p: Principal, recordId: string) {
+    this.tide.ensure();
+    const { r, owner, admin } = this.decision(p, recordId);
+    if (!owner && !admin) missing();
+    const items = this.db
+      .all(
+        `SELECT a.action,a.actor_id AS actorId,u.display_name AS actorName,a.details,a.created_at AS at FROM audit a JOIN users u ON u.id=a.actor_id
+        WHERE (a.entity_id=? AND a.action IN ('ACCESS_INTENT_SUBMITTED','SIM_TIDE_DECRYPT','SIM_TIDE_DECRYPT_DENIED'))
+        OR (a.action IN ('SIM_TIDE_APPROVAL','SIM_TIDE_QUORUM_COMMITTED') AND a.entity_id IN (SELECT id FROM access_requests WHERE record_id=?))
+        ORDER BY a.created_at DESC,a.id LIMIT 200`,
+        r.id,
+        r.id,
+      )
+      .map((x) => ({ ...x, details: JSON.parse(x.details), at: new Date(x.at).toISOString() }));
+    return { recordId: r.id, items, enforcedBy: SIM_LABEL };
   }
 }
 
@@ -295,6 +341,11 @@ export class SimController {
   @ApiOperation({ summary: 'SIMULATED: whether the caller can decrypt, plus quorum state of requests' })
   access(@Req() r: AuthRequest, @Id() id: string) {
     return this.fabric.status(r.principal, id);
+  }
+  @Get('records/:id/access-log')
+  @ApiOperation({ summary: 'SIMULATED: owner/admin transparency log of shares, approvals and decrypt attempts' })
+  accessLog(@Req() r: AuthRequest, @Id() id: string) {
+    return this.fabric.accessLog(r.principal, id);
   }
   @Post('records/:id/decrypt')
   @ApiOperation({ summary: 'SIMULATED: Tide Fabric decrypts only when policy allows; otherwise 403 TIDE_POLICY_DENIED' })

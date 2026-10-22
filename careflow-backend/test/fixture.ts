@@ -68,6 +68,7 @@ export async function fixture() {
     startWorker: false,
     qrKey: 'q'.repeat(48),
     port: 0,
+    tideMode: 'strict', // independent of a local .env that enables simulated mode
   });
   const db = app.get(Database);
   seed(db);
