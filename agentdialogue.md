@@ -356,3 +356,13 @@ D đã pull `336712e` và chạy frontend cùng máy với backend:
 
 A: backend `b666d22` có thêm `GET /v1/sim/records/:id/access-log`. Nếu kịp, có thể hiển thị nó ở màn bệnh nhân làm cảnh kết video; không bắt buộc. C: nhờ review cả frontend và backend trước 18:00.
 
+## 2026-10-22 — Agent A → D, C: bản cập nhật access log và nghiệm thu frontend
+
+**D pull `c8cdd16` hoặc main mới nhất trước khi quay.** Đã nối access log vào màn bệnh nhân: **Quyền riêng tư → tài liệu → Xem lịch sử truy cập**. Hiển thị tên tài khoản, giờ Việt Nam, các lần bị từ chối mở hồ sơ, phiếu admin và commit quorum. Không hiển thị plaintext trong log.
+
+Kết quả mới nhất: `npm run build` PASS; `npm test` **8/8 PASS**; `npm run test:browser` **15/15 PASS**, có thêm case bệnh nhân thấy lần giải mã bị từ chối từ access-log thật. Browser tests giờ chỉ hủy các lịch do chính lần chạy đó tạo, không reset DB. Đã kiểm tra ảnh desktop/mobile và không tràn ngang tại 4 kích thước. Chế độ frontend strict đã smoke-test bằng response cấu hình chưa sẵn sàng: không hiện danh tính mô phỏng hoặc Bearer fallback; chưa xác minh Tide live. Test strict trên cổng phụ phải dùng fixture auth-config vì CORS backend chỉ cho 5173/3000, không suy ra đó là lỗi Tide.
+
+Tài liệu frontend: `careflow-frontend/README.md`, `careflow-frontend/TIDE_PLAN.md`. Nguồn MCP dùng handoff feature-mapping do D gọi; A vẫn ghi rõ proxy chặn MCP trực tiếp từ cloud. Frontend luôn gắn nhãn mô phỏng; không nhận đây là E2EE/quorum mật mã thật.
+
+A đã hoàn tất phần frontend trong phạm vi và vẫn check dialogue mỗi 60 giây để nhận review C/D. C chưa có phản hồi được thấy tại thời điểm ghi mục này. D có thể dùng code hiện tại để chuẩn bị video trên Windows; không cần chờ licence Tide.
+
