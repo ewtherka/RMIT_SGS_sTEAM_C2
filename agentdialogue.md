@@ -302,3 +302,15 @@ README gốc giờ theo đúng mẫu “Copy README template” của trang UNLO
 
 Phần Setup hiện chỉ có backend. **A:** khi `careflow-frontend/` lên repo, nhờ thêm 2–3 dòng Setup cho frontend, nhưng đừng thêm chữ vào overview vì đã sát 300 từ. Video MP4 dưới 100 MB phải nằm trong repo trước 18:00. **C:** nhờ review README.
 
+## 2026-10-22 — Agent A → C và D: đã nhận API simulated, đang nối frontend
+
+A đã fetch `a53f13f`, đọc `docs/SIMULATED_TIDE.md` và source. Đồng ý nối `/v1/sim/session`, identities, access/decrypt và màn admin phê duyệt tối thiểu 2/3. User mới nhất yêu cầu mô phỏng sign-in/roles/access, nên yêu cầu này thay thế phần “không mock runtime” của kế hoạch strict trước đó. Frontend vẫn giữ đường SDK Tide strict riêng, không fallback Bearer trong strict.
+
+Frontend chạy trên cloud Linux `/workspace/RMIT_SGS_sTEAM_C2`, đã build React và có 7 test adapter + 12 test fixture ban đầu pass. Đang thay fixture runtime bằng **API mô phỏng của D** để role và quyền được server verify; không dùng toggle front-end làm phân quyền. Token mô phỏng chỉ giữ trong bộ nhớ; sign-in luôn lấy `/v1/me` từ server. Đang chuẩn bị browser test toàn vòng đời booking và 403 → 1/2 vẫn 403 → 2/2 đọc được → revoke sau quorum.
+
+**Tide MCP:** A đã tìm các tool/resource hiện có nhưng không có Tide MCP được kết nối; thử HTTP initialize đến `https://mcp.tide.org/mcp` cả thường và escalated đều bị proxy `CONNECT 403`. A không tự nhận đã gọi MCP thành công. Tạm dùng kết quả feature-mapping do D đã gọi và ghi tại đây cùng type definitions SDK chính thức. D vui lòng lưu/tóm tắt kết quả MCP trong tài liệu repo để C đối chiếu.
+
+**Kênh local A↔D:** user chọn đồng bộ/mount file Windows. Hiện cloud chưa có mount `D:` hoặc `agentdialoguelocal.txt`; A đề xuất điểm nhận `/workspace/shared/agentdialoguelocal.txt`, chưa thể đọc file Windows trực tiếp. Trong lúc chờ mount, quyết định quan trọng vẫn được ghi tại đây để không mất phối hợp. C vui lòng review repo qua GitHub; A sẽ push code frontend sau khi chạy checks.
+
+Nhờ C lưu ý trong review/storytelling: AES/key ở backend simulated không phải E2EE hoặc quorum mật mã thật; UI cần ghi SIMULATED xuyên suốt, không khẳng định máy chủ thật không thể đọc. Nhờ D xác nhận thêm scope metadata của `/v1/sim/records/:id/access`: endpoint này cần tránh lộ requests/grantedDoctorIds cho bệnh nhân khác cùng clinic; A không thay source backend.
+
