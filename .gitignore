@@ -10,3 +10,6 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local publication clone and preserved Git metadata
+.careflow-publish/
