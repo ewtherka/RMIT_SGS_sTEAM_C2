@@ -816,7 +816,7 @@ function RecordDetail({
           <p>
             {record.ciphertext
               ? "Nhấn giải mã để gửi yêu cầu qua phiên Tide của chính bạn."
-              : "Tác giả cần hoàn tất policy và mã hóa nội dung trong trình duyệt."}
+              : "Người tạo cần hoàn tất policy và mã hóa nội dung trong trình duyệt."}
           </p>
         </div>
       )}

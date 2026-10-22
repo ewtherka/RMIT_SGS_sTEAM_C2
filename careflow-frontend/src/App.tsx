@@ -330,7 +330,7 @@ export default function App() {
               <Icon name="shield" />
               <span>
                 <strong>Mô phỏng TideCloak</strong> · Đăng nhập, vai trò và
-                quyền truy cập dùng dữ liệu giả.
+                quyền truy cập dùng dữ liệu mô phỏng.
               </span>
               <button onClick={session.showAccounts}>
                 {session.me ? "Đổi tài khoản" : "Chọn tài khoản"}

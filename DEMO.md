@@ -7,7 +7,7 @@
 3. Nhấp đúp **START-DEMO.cmd**. Lần đầu cần Internet để cài thư viện backend; không cần Docker hay cấu hình Tide thật.
 4. Mở **http://localhost:5173**, giữ cửa sổ lệnh mở trong lúc quay. API/Swagger: http://localhost:3333/docs.
 
-Trong bản ZIP, giao diện và backend đã build sẵn. Đây là **web app chạy cục bộ**, không phải file `.exe` độc lập. Không có mật khẩu, token, dữ liệu bệnh nhân thật hoặc database cũ trong gói. Database giả được tạo trên máy người chạy. Đừng nhập dữ liệu y tế thật.
+Trong bản ZIP, giao diện và backend đã build sẵn. Đây là **web app chạy cục bộ**, không phải file `.exe` độc lập. Không có mật khẩu, token, dữ liệu bệnh nhân thật hoặc database cũ trong gói. Database mô phỏng được tạo trên máy người chạy. Đừng nhập dữ liệu y tế thật.
 
 Nếu dùng source GitHub: `git pull --rebase origin main`, sau đó chạy `START-DEMO.cmd` hoặc `node scripts/start-demo.mjs`. Source sẽ được build trước khi chạy. Hai dịch vụ CareFlow đang chạy đúng cổng sẽ được giữ nguyên; launcher không tự tắt tiến trình của bạn. Khi dùng app cũ đang chạy, hãy tự dừng/restart để nhận code mới. Gặp cổng bị app khác chiếm, launcher báo lỗi thay vì kill app đó.
 
@@ -28,10 +28,10 @@ Chuyển tài khoản bằng banner **MÔ PHỎNG** ở đầu trang. Refresh tr
 
 Sau khi thu hồi quyền chia sẻ bằng 2 admin, giữ lịch BS. Lan đang hiệu lực:
 
-BS. Lan mở hồ sơ → **Yêu cầu truy cập khẩn cấp**, nhập lý do giả ≥10 ký tự → 2 admin độc lập phê duyệt → quyền đọc **60 phút**, chỉ một hồ sơ → Nguyễn An thấy lý do và hạn truy cập trong Quyền riêng tư → **Kết thúc ngay** → Lan bị chặn lại. Một phiếu chưa đủ; admin không tự được quyền đọc.
+BS. Lan mở hồ sơ → **Yêu cầu truy cập khẩn cấp**, nhập lý do minh họa ≥10 ký tự → 2 admin độc lập phê duyệt → quyền đọc **60 phút**, chỉ một hồ sơ → Nguyễn An thấy lý do và hạn truy cập trong Quyền riêng tư → **Kết thúc ngay** → Lan bị chặn lại. Một phiếu chưa đủ; admin không tự được quyền đọc.
 
 ## Giới hạn phải nói rõ
 
 TideCloak sign-in, roles, access checks và quorum hiện được **mô phỏng ở API**, đúng yêu cầu prototype. Quyền không được tự cấp ở frontend. Backend giữ khóa AES và kiểm tra quorum bằng SQLite; **không phải Tide E2EE hoặc quorum mật mã thật**. Strict mode có adapter SDK chính thức nhưng còn cần xác thực Tide thực tế. Không quảng cáo đây là sản phẩm y tế production.
 
-Launcher không reset DB. Nếu đã quay/thử trước đó, dùng thư mục giải nén mới để có trạng thái giả sạch; không xóa database đang cần dùng. Quá trình test tạo audit entry nên không chạy test trên database chuẩn bị quay.
+Launcher không reset DB. Nếu đã quay/thử trước đó, dùng thư mục giải nén mới để có trạng thái demo sạch; không xóa database đang cần dùng. Quá trình test tạo audit entry nên không chạy test trên database chuẩn bị quay.

@@ -33,7 +33,8 @@ async function decrypt(status) {
   );
   await page.getByRole("button", { name: "Kiểm tra và mở hồ sơ" }).click();
   assert.equal((await response).status(), status);
-  if (status >= 200 && status < 300) await page.locator(".decrypted-record pre").waitFor();
+  if (status >= 200 && status < 300)
+    await page.locator(".decrypted-record pre").waitFor();
   else {
     await page
       .getByRole("alert")
@@ -130,7 +131,7 @@ async function patientRequest(path, options = {}) {
     true,
   );
   const reason =
-    "Dữ liệu giả: cần xem kết quả trong tình huống cấp cứu minh họa.";
+    "Dữ liệu mô phỏng: cần xem kết quả trong tình huống cấp cứu minh họa.";
   await modal
     .getByRole("textbox", { name: "Lý do truy cập khẩn cấp" })
     .fill(reason);

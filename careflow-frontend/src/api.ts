@@ -16,6 +16,7 @@ import type {
   Sharing,
   Visit,
 } from "./types";
+import { simulationLabels } from "./presentation";
 
 export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
 export class ApiError extends Error {
@@ -87,7 +88,9 @@ export function createApi(
         "Không kết nối được máy chủ. Kiểm tra kết nối rồi thử lại.",
       );
     }
-    const data = await response.json().catch(() => null);
+    const raw = await response.json().catch(() => null);
+    const data =
+      import.meta.env.VITE_AUTH_MODE === "tide" ? raw : simulationLabels(raw);
     if (!response.ok)
       throw new ApiError(
         data?.code || "HTTP_ERROR",

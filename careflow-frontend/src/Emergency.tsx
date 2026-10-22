@@ -199,7 +199,7 @@ export function EmergencyPanel({
             </small>
             <Notice>
               Cần 2/3 admin độc lập phê duyệt. Hiệu lực tối đa 60 phút; bệnh
-              nhân có thể kết thúc ngay. Chỉ dùng dữ liệu giả cho bản mô phỏng.
+              nhân có thể kết thúc ngay. Chỉ dùng dữ liệu demo cho bản mô phỏng.
             </Notice>
           </form>
         </Modal>
