@@ -43,6 +43,7 @@ async function simFixture() {
   return {
     call,
     login,
+    db: app.get(Database),
     close: async () => {
       await app.close();
       rmSync(root, { recursive: true, force: true });
@@ -124,4 +125,55 @@ test('simulated Emergent Authority: 2 of 3 independent admins gate record access
   for (const action of ['ACCESS_INTENT_SUBMITTED', 'SIM_TIDE_APPROVAL', 'SIM_TIDE_QUORUM_COMMITTED', 'SIM_TIDE_DECRYPT', 'SIM_TIDE_DECRYPT_DENIED'])
     assert.ok(actions.includes(action), action);
   assert.equal((await f.call('GET', `/v1/sim/records/${record}/access-log`, lan)).status, 404);
+});
+
+test('simulated break-glass: quorum-approved, time-limited, visible and revocable by the patient', async (t) => {
+  const f = await simFixture();
+  t.after(() => f.close());
+  const record = DEMO.records[0];
+  const [patient, lan, a1, a2, a3] = await Promise.all(
+    [DEMO.patientUser, DEMO.doctorUserB, ...DEMO.admins].map(f.login),
+  );
+  const ask = (token: string, reason = 'Người bệnh bất tỉnh tại cấp cứu, cần kết quả xét nghiệm gần nhất.') =>
+    f.call('POST', `/v1/sim/records/${record}/emergency-requests`, token, { reason });
+  // Without a treating relationship the record stays invisible.
+  assert.equal((await ask(lan)).status, 404);
+  await f.call('POST', '/v1/appointments', patient, body(11, DEMO.doctorB));
+  assert.equal((await ask(lan, 'ngắn')).status, 400);
+  assert.equal((await ask(a1)).status, 403);
+  const req = await ask(lan);
+  assert.equal(req.status, 201);
+  assert.equal(req.json.status, 'PENDING_TIDE');
+  assert.equal((await ask(lan)).json.code, 'EMERGENCY_OPEN');
+  const queue = await f.call('GET', '/v1/sim/approvals', a1);
+  assert.equal(queue.json.emergencyItems.length, 1);
+  await f.call('POST', `/v1/sim/emergency-requests/${req.json.id}/approve`, a1);
+  assert.equal((await f.call('POST', `/v1/sim/records/${record}/decrypt`, lan)).status, 403);
+  const committed = await f.call('POST', `/v1/sim/emergency-requests/${req.json.id}/approve`, a2);
+  assert.equal(committed.json.status, 'COMMITTED');
+  assert.ok(committed.json.expiresAt);
+  assert.equal((await f.call('POST', `/v1/sim/emergency-requests/${req.json.id}/approve`, a3)).json.code, 'REQUEST_CLOSED');
+  const read = await f.call('POST', `/v1/sim/records/${record}/decrypt`, lan);
+  assert.equal(read.json.allowedBy, 'EMERGENCY_QUORUM_GRANT');
+  // Emergency access covers only the requested record.
+  assert.equal((await f.call('POST', `/v1/sim/records/${DEMO.records[1]}/decrypt`, lan)).status, 403);
+  // The patient sees it and can end it early.
+  const view = await f.call('GET', `/v1/sim/records/${record}/access`, patient);
+  assert.equal(view.json.emergencies[0].status, 'COMMITTED');
+  const ended = await f.call('POST', `/v1/sim/emergency-requests/${req.json.id}/end`, patient);
+  assert.equal(ended.json.status, 'ENDED');
+  assert.equal((await f.call('POST', `/v1/sim/records/${record}/decrypt`, lan)).status, 403);
+  const log = (await f.call('GET', `/v1/sim/records/${record}/access-log`, patient)).json.items.map((x: any) => x.action);
+  for (const action of ['SIM_EMERGENCY_REQUESTED', 'SIM_EMERGENCY_APPROVAL', 'SIM_EMERGENCY_COMMITTED', 'SIM_EMERGENCY_ENDED'])
+    assert.ok(log.includes(action), action);
+
+  // A second request expires on its own after the time limit.
+  const again = await ask(lan);
+  await f.call('POST', `/v1/sim/emergency-requests/${again.json.id}/approve`, a1);
+  await f.call('POST', `/v1/sim/emergency-requests/${again.json.id}/approve`, a3);
+  assert.equal((await f.call('POST', `/v1/sim/records/${record}/decrypt`, lan)).status, 201);
+  f.db.run('UPDATE sim_emergency SET expires_at=? WHERE id=?', Date.now() - 1000, again.json.id);
+  assert.equal((await f.call('POST', `/v1/sim/records/${record}/decrypt`, lan)).status, 403);
+  const expired = await f.call('GET', `/v1/sim/records/${record}/access`, lan);
+  assert.equal(expired.json.emergencies[0].status, 'EXPIRED');
 });

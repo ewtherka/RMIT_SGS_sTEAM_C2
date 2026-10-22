@@ -366,3 +366,74 @@ Tài liệu frontend: `careflow-frontend/README.md`, `careflow-frontend/TIDE_PLA
 
 A đã hoàn tất phần frontend trong phạm vi và vẫn check dialogue mỗi 60 giây để nhận review C/D. C chưa có phản hồi được thấy tại thời điểm ghi mục này. D có thể dùng code hiện tại để chuẩn bị video trên Windows; không cần chờ licence Tide.
 
+## 2026-10-22 17:05 — Agent D → A, C: TÍNH NĂNG MỚI “Truy cập khẩn cấp (break-glass)”: API, schema, gợi ý UI
+
+Người dùng yêu cầu D thêm tính năng mới và mô tả chi tiết tại đây. Mọi thay đổi chỉ là **bổ sung**; contract mà A đang dùng giữ nguyên (`items` của approvals vẫn như cũ). Cảm ơn A đã nối access log: D đã pull `c8cdd16`/`1d64744`, và Vite trên máy Windows tự nạp lại.
+
+### Vì sao tính năng này hợp đề bài
+
+Câu hỏi giám khảo dễ đặt ra: *“Nếu bệnh nhân bất tỉnh, không tự chia sẻ được thì sao?”*. Ở hệ thống thường, câu trả lời là “admin mở hết”, tức là đúng cái lỗ hổng mà UNLOCKED muốn xoá. CareFlow trả lời rằng **khẩn cấp cũng không có master key**:
+- bác sĩ điều trị phải nêu lý do;
+- vẫn cần **2/3 admin độc lập** duyệt;
+- quyền chỉ áp dụng cho **đúng một hồ sơ**, **tự hết hạn sau 60 phút**;
+- bệnh nhân **thấy toàn bộ**, kể cả lý do, và **có thể chấm dứt** ngay khi tỉnh lại.
+
+Authority chỉ “emerge” khi lý do lâm sàng, quan hệ điều trị và quorum cùng khớp.
+
+### API mới (mọi request cần `Authorization: Bearer <token mô phỏng>`)
+
+| Method | Path | Ai gọi | Kết quả |
+| --- | --- | --- | --- |
+| POST | `/v1/sim/records/:id/emergency-requests` | Bác sĩ **đang có lịch** CONFIRMED / CHECKED_IN / IN_PROGRESS với bệnh nhân | body `{reason}` (10–500 ký tự) → `201 EmergencyRequest` |
+| POST | `/v1/sim/emergency-requests/:id/approve` | Admin cùng clinic | `201 EmergencyRequest`; phiếu thứ 2 đặt `status:"COMMITTED"` và `expiresAt` = giờ hiện tại + 60 phút |
+| POST | `/v1/sim/emergency-requests/:id/end` | Bệnh nhân chủ hồ sơ, hoặc bác sĩ đã gửi yêu cầu | `201 EmergencyRequest` với `status:"ENDED"`; dùng được khi đang chờ hoặc đang hiệu lực |
+
+Các thay đổi chỉ thêm field:
+- `GET /v1/sim/approvals` có thêm `emergencyItems: EmergencyRequest[]` (các yêu cầu đang chờ).
+- `GET /v1/sim/records/:id/access` có thêm `emergencies: EmergencyRequest[]`. Chủ hồ sơ và admin thấy tất cả; bác sĩ chỉ thấy yêu cầu của chính mình.
+- `POST /v1/sim/records/:id/decrypt` trả `allowedBy:"EMERGENCY_QUORUM_GRANT"` khi quyền khẩn cấp còn hiệu lực. Khi hết hạn hoặc bị chấm dứt thì trả `403 TIDE_POLICY_DENIED` như cũ.
+- `GET /v1/sim/records/:id/access-log` có thêm 4 action: `SIM_EMERGENCY_REQUESTED` (`details.reason`, `details.emergencyId`), `SIM_EMERGENCY_APPROVAL`, `SIM_EMERGENCY_COMMITTED` (`details.minutes:60`), `SIM_EMERGENCY_ENDED` (`details.by:"PATIENT"|"DOCTOR"`).
+
+```ts
+type EmergencyRequest = {
+  id: string; recordId: string; recordTitle: string;
+  doctorId: string; doctorName: string; reason: string;
+  status: 'PENDING_TIDE' | 'COMMITTED' | 'EXPIRED' | 'ENDED'; // EXPIRED được server tính theo expiresAt
+  durationMinutes: 60; expiresAt: string | null; // ISO, null khi chưa commit
+  approvals: { adminId: string; displayName: string; approvedAt: string }[];
+  quorum: { threshold: 2; of: 3; reached: boolean };
+  createdAt: string; enforcedBy: 'SIMULATED_TIDECLOAK';
+};
+```
+
+**Lỗi khi tạo yêu cầu:**
+- `404`: bác sĩ không có quan hệ nào với hồ sơ; hồ sơ không bị lộ.
+- `400 NO_CARE_RELATIONSHIP`: bác sĩ không có lịch đang hiệu lực.
+- `400` validation: lý do ngắn hơn 10 ký tự.
+- `403`: người gọi không phải bác sĩ (admin cũng không tự xin được).
+- `409 ALREADY_AUTHORIZED`: bác sĩ đã đọc được hồ sơ rồi.
+- `409 EMERGENCY_OPEN`: đã có yêu cầu đang chờ hoặc đang hiệu lực.
+
+**Lỗi khi duyệt:** `409 ALREADY_APPROVED` nếu cùng admin duyệt lần hai; `409 REQUEST_CLOSED` nếu yêu cầu đã commit hoặc kết thúc.
+
+### Gợi ý UI cho A (nếu kịp; không bắt buộc cho video chính)
+
+1. **Bác sĩ:** khi decrypt trả 403 với hồ sơ của bệnh nhân đang có lịch, hiện nút “Yêu cầu truy cập khẩn cấp”. Bấm vào mở ô nhập lý do (≥10 ký tự) và ghi chú “Cần 2/3 admin độc lập, hiệu lực 60 phút, bệnh nhân sẽ thấy lý do”. Sau đó hiển thị trạng thái từ `access.emergencies[0]`.
+2. **Admin:** trong màn “Phê duyệt quyền truy cập”, thêm mục “Khẩn cấp” từ `emergencyItems`. Lý do hiển thị nổi bật, kèm nút duyệt gọi `/emergency-requests/:id/approve`, và tắt nút sau khi admin này đã duyệt (giống luồng hiện có).
+3. **Bệnh nhân:** ở Quyền riêng tư, nếu `access.emergencies` có mục `COMMITTED`, hiện banner đỏ “BS. … đang có quyền khẩn cấp đến HH:mm, lý do: …” cùng nút **“Kết thúc ngay”** gọi `/end`. Access log hiển thị 4 action mới.
+
+**Cảnh phụ cho video** (khoảng 20 giây, nếu còn thời gian): BS Lan gửi yêu cầu khẩn cấp → admin 1 duyệt, vẫn 403 → admin 2 duyệt, Lan đọc được → bệnh nhân bấm “Kết thúc ngay”, Lan bị chặn lại.
+
+### Kiểm chứng
+
+- `careflow-backend`: `npm run build` sạch, `npm test` **13/13 PASS** (thêm 1 test break-glass). Test cover:
+  - không có quan hệ thì 404; lý do ngắn thì 400; admin tự xin thì 403;
+  - yêu cầu trùng thì 409; 1/2 phiếu vẫn 403; 2/2 thì đọc được;
+  - phiếu thứ 3 thì `REQUEST_CLOSED`; hồ sơ thứ hai vẫn bị chặn;
+  - bệnh nhân thấy và chấm dứt được, sau đó 403;
+  - log đủ 4 action; hết hạn tự động chuyển 403 và `EXPIRED`.
+- API trên máy Windows đã **khởi động lại** với bảng mới `sim_emergency` / `sim_emergency_approvals`. **DB vẫn sạch** để quay: 0 yêu cầu, 0 grant, 0 yêu cầu khẩn cấp, BS Lan chưa có lịch.
+- Giới hạn trung thực giữ nguyên: thời hạn và quorum được kiểm tra trong SQLite của backend mô phỏng. Trên Tide thật, việc này thuộc về policy/quorum của Tide Fabric. Tài liệu chi tiết: `careflow-backend/docs/SIMULATED_TIDE.md`, mục “Break-glass emergency access”.
+
+**C:** nhờ review `requestEmergency`, `approveEmergency`, `endEmergency` và điều kiện `emergency` trong `decision()` (`careflow-backend/src/simulation.ts`). Hạn 18:00.
+

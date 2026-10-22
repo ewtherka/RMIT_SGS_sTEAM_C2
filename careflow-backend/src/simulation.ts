@@ -1,13 +1,13 @@
 import { Controller, Get, Inject, Injectable, Param, ParseUUIDPipe, Post, Req, type OnModuleInit } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { z } from 'zod';
 import { CONFIG, type AppConfig } from './config.js';
 import { Database } from './database.js';
-import { ApiError, conflict, missing } from './errors.js';
+import { ApiError, bad, conflict, missing } from './errors.js';
 import { Public, hasRole, requireRole, type AuthRequest, type Principal } from './auth/auth.js';
 import { Access } from './identity.js';
 import { DEMO } from './seed.js';
@@ -18,6 +18,7 @@ import * as S from './schemas.js';
 // tideuserkey, azp/aud) so strict mode can replace this module without touching business code.
 export const SIM_LABEL = 'SIMULATED_TIDECLOAK';
 export const QUORUM = { threshold: 2, of: DEMO.admins.length };
+export const EMERGENCY_MINUTES = 60;
 const CLIENT = 'careflow-client';
 const SCHEME = 'SIMULATED_TIDE_E2EE_AES256GCM';
 const SIM_ROLES: Record<string, string[]> = {
@@ -62,7 +63,9 @@ export class SimTide implements OnModuleInit {
     if (!this.enabled) return;
     this.db.sql.exec(`
       CREATE TABLE IF NOT EXISTS sim_approvals(request_id TEXT NOT NULL REFERENCES access_requests(id),admin_id TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,PRIMARY KEY(request_id,admin_id));
-      CREATE TABLE IF NOT EXISTS sim_grants(record_id TEXT NOT NULL REFERENCES records(id),doctor_id TEXT NOT NULL REFERENCES doctors(id),granted_at INTEGER NOT NULL,PRIMARY KEY(record_id,doctor_id));`);
+      CREATE TABLE IF NOT EXISTS sim_grants(record_id TEXT NOT NULL REFERENCES records(id),doctor_id TEXT NOT NULL REFERENCES doctors(id),granted_at INTEGER NOT NULL,PRIMARY KEY(record_id,doctor_id));
+      CREATE TABLE IF NOT EXISTS sim_emergency(id TEXT PRIMARY KEY,record_id TEXT NOT NULL REFERENCES records(id),doctor_id TEXT NOT NULL REFERENCES doctors(id),requester_id TEXT NOT NULL REFERENCES users(id),reason TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'PENDING_TIDE',expires_at INTEGER,created_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS sim_emergency_approvals(emergency_id TEXT NOT NULL REFERENCES sim_emergency(id),admin_id TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,PRIMARY KEY(emergency_id,admin_id));`);
     // Seed records start as DRAFT without ciphertext. Simulated Tide encrypts and releases them once.
     DEMO.records.forEach((id, i) => {
       const r = this.db.get('SELECT * FROM records WHERE id=?', id);
@@ -169,6 +172,43 @@ export class SimFabric {
       id,
     );
   }
+  private presentEmergency(x: any) {
+    const approvals = this.db
+      .all(
+        'SELECT s.admin_id AS adminId,u.display_name AS displayName,s.created_at AS approvedAt FROM sim_emergency_approvals s JOIN users u ON u.id=s.admin_id WHERE s.emergency_id=? ORDER BY s.created_at',
+        x.id,
+      )
+      .map((a) => ({ ...a, approvedAt: new Date(a.approvedAt).toISOString() }));
+    return {
+      id: x.id,
+      recordId: x.record_id,
+      recordTitle: x.title,
+      doctorId: x.doctor_id,
+      doctorName: x.doctor_name,
+      reason: x.reason,
+      status: x.status === 'COMMITTED' && x.expires_at <= Date.now() ? 'EXPIRED' : x.status,
+      durationMinutes: EMERGENCY_MINUTES,
+      expiresAt: x.expires_at ? new Date(x.expires_at).toISOString() : null,
+      approvals,
+      quorum: { ...QUORUM, reached: approvals.length >= QUORUM.threshold },
+      createdAt: new Date(x.created_at).toISOString(),
+      enforcedBy: SIM_LABEL,
+    };
+  }
+  private emergencyRow(id: string) {
+    return this.db.get(
+      'SELECT e.*,r.title,r.clinic_id,r.patient_id,d.display_name AS doctor_name FROM sim_emergency e JOIN records r ON r.id=e.record_id JOIN doctors d ON d.id=e.doctor_id WHERE e.id=?',
+      id,
+    );
+  }
+  private emergencies(where: string, ...params: any[]) {
+    return this.db
+      .all(
+        `SELECT e.*,r.title,d.display_name AS doctor_name FROM sim_emergency e JOIN records r ON r.id=e.record_id JOIN doctors d ON d.id=e.doctor_id WHERE ${where} ORDER BY e.created_at DESC LIMIT 50`,
+        ...params,
+      )
+      .map((x) => this.presentEmergency(x));
+  }
   pending(p: Principal) {
     this.tide.ensure();
     requireRole(p, 'admin');
@@ -181,7 +221,90 @@ export class SimFabric {
           u.id,
         )
         .map((x) => this.presentRequest(x)),
+      emergencyItems: this.emergencies(
+        "e.status='PENDING_TIDE' AND EXISTS(SELECT 1 FROM memberships m WHERE m.user_id=? AND m.clinic_id=r.clinic_id)",
+        u.id,
+      ),
     };
+  }
+  // Break-glass: the treating doctor asks for one record when the patient cannot share it themselves.
+  // It still needs the same independent quorum, expires automatically and is visible to the patient.
+  requestEmergency(p: Principal, recordId: string, b: { reason: string }) {
+    this.tide.ensure();
+    requireRole(p, 'doctor');
+    const { r, reason, careRelation, doctorId } = this.decision(p, recordId);
+    if (r.state !== 'RELEASED') missing();
+    if (reason) conflict('ALREADY_AUTHORIZED', 'Bác sĩ đã có quyền đọc hồ sơ này.');
+    if (!careRelation || !doctorId)
+      bad('NO_CARE_RELATIONSHIP', 'Chỉ bác sĩ đang có lịch điều trị với người bệnh mới yêu cầu truy cập khẩn cấp.');
+    const doctor = doctorId!;
+    return this.db.transaction(() => {
+      if (
+        this.db.get(
+          "SELECT 1 FROM sim_emergency WHERE record_id=? AND doctor_id=? AND (status='PENDING_TIDE' OR (status='COMMITTED' AND expires_at>?))",
+          r.id,
+          doctor,
+          Date.now(),
+        )
+      )
+        conflict('EMERGENCY_OPEN', 'Đã có yêu cầu khẩn cấp đang chờ hoặc đang hiệu lực cho hồ sơ này.');
+      const id = randomUUID();
+      this.db.run(
+        'INSERT INTO sim_emergency(id,record_id,doctor_id,requester_id,reason,created_at) VALUES(?,?,?,?,?,?)',
+        id,
+        r.id,
+        doctor,
+        p.user!.id,
+        b.reason,
+        Date.now(),
+      );
+      this.db.audit(p.user!.id, r.clinic_id, 'SIM_EMERGENCY_REQUESTED', r.id, { emergencyId: id, reason: b.reason });
+      return this.presentEmergency(this.emergencyRow(id));
+    });
+  }
+  approveEmergency(p: Principal, id: string) {
+    this.tide.ensure();
+    requireRole(p, 'admin');
+    return this.db.transaction(() => {
+      const e = this.emergencyRow(id) ?? missing();
+      this.access.clinic(p, e.clinic_id);
+      if (e.status !== 'PENDING_TIDE') conflict('REQUEST_CLOSED', 'Yêu cầu khẩn cấp đã được xử lý.');
+      if (this.db.get('SELECT 1 FROM sim_emergency_approvals WHERE emergency_id=? AND admin_id=?', id, p.user!.id))
+        conflict('ALREADY_APPROVED', 'Mỗi admin chỉ phê duyệt một lần; cần admin độc lập khác.');
+      this.db.run('INSERT INTO sim_emergency_approvals VALUES(?,?,?)', id, p.user!.id, Date.now());
+      this.db.audit(p.user!.id, e.clinic_id, 'SIM_EMERGENCY_APPROVAL', id);
+      const count = Number(
+        this.db.get('SELECT COUNT(*) AS n FROM sim_emergency_approvals WHERE emergency_id=?', id)!.n,
+      );
+      if (count >= QUORUM.threshold) {
+        this.db.run(
+          "UPDATE sim_emergency SET status='COMMITTED',expires_at=? WHERE id=?",
+          Date.now() + EMERGENCY_MINUTES * 60000,
+          id,
+        );
+        this.db.audit(p.user!.id, e.clinic_id, 'SIM_EMERGENCY_COMMITTED', id, { minutes: EMERGENCY_MINUTES });
+      }
+      return this.presentEmergency(this.emergencyRow(id));
+    });
+  }
+  // The patient (or the requesting doctor) can close emergency access early, pending or active.
+  endEmergency(p: Principal, id: string) {
+    this.tide.ensure();
+    return this.db.transaction(() => {
+      const e = this.emergencyRow(id) ?? missing();
+      const u = this.access.user(p);
+      this.access.clinic(p, e.clinic_id);
+      const owner =
+        hasRole(p, 'patient') &&
+        Boolean(this.db.get('SELECT 1 FROM patients WHERE id=? AND user_id=?', e.patient_id, u.id));
+      const requester = hasRole(p, 'doctor') && e.requester_id === u.id;
+      if (!owner && !requester) missing();
+      const open = e.status === 'PENDING_TIDE' || (e.status === 'COMMITTED' && e.expires_at > Date.now());
+      if (!open) conflict('REQUEST_CLOSED', 'Quyền khẩn cấp đã kết thúc.');
+      this.db.run("UPDATE sim_emergency SET status='ENDED',expires_at=? WHERE id=?", Date.now(), id);
+      this.db.audit(u.id, e.clinic_id, 'SIM_EMERGENCY_ENDED', id, { by: owner ? 'PATIENT' : 'DOCTOR' });
+      return this.presentEmergency(this.emergencyRow(id));
+    });
   }
   approve(p: Principal, requestId: string) {
     this.tide.ensure();
@@ -233,10 +356,28 @@ export class SimFabric {
           doctor!.id,
         ),
       );
+    const emergency =
+      Boolean(doctor) &&
+      Boolean(
+        this.db.get(
+          "SELECT 1 FROM sim_emergency WHERE record_id=? AND doctor_id=? AND status='COMMITTED' AND expires_at>?",
+          r.id,
+          doctor!.id,
+          Date.now(),
+        ),
+      );
     const admin = hasRole(p, 'admin');
-    if (!owner && !author && !granted && !careRelation && !admin) missing();
-    const reason = owner ? 'PATIENT_USER_POLICY' : author ? 'AUTHOR_CARE_TEAM' : granted ? 'QUORUM_GRANT' : null;
-    return { r, reason, owner, admin };
+    if (!owner && !author && !granted && !careRelation && !emergency && !admin) missing();
+    const reason = owner
+      ? 'PATIENT_USER_POLICY'
+      : author
+        ? 'AUTHOR_CARE_TEAM'
+        : granted
+          ? 'QUORUM_GRANT'
+          : emergency
+            ? 'EMERGENCY_QUORUM_GRANT'
+            : null;
+    return { r, reason, owner, admin, careRelation, doctorId: doctor?.id as string | undefined };
   }
   decrypt(p: Principal, recordId: string) {
     this.tide.ensure();
@@ -263,8 +404,13 @@ export class SimFabric {
   }
   status(p: Principal, recordId: string) {
     this.tide.ensure();
-    const { r, reason, owner, admin } = this.decision(p, recordId);
+    const { r, reason, owner, admin, doctorId } = this.decision(p, recordId);
     const full = owner || admin;
+    const emergencies = full
+      ? this.emergencies('e.record_id=?', r.id)
+      : doctorId
+        ? this.emergencies('e.record_id=? AND e.doctor_id=?', r.id, doctorId)
+        : [];
     return {
       recordId: r.id,
       canDecrypt: Boolean(reason) && r.state === 'RELEASED',
@@ -281,6 +427,8 @@ export class SimFabric {
             )
             .map((x) => this.presentRequest(x))
         : [],
+      // Owner/admin see every break-glass request; a doctor sees only their own.
+      emergencies,
       quorum: QUORUM,
       enforcedBy: SIM_LABEL,
     };
@@ -293,9 +441,11 @@ export class SimFabric {
     const items = this.db
       .all(
         `SELECT a.action,a.actor_id AS actorId,u.display_name AS actorName,a.details,a.created_at AS at FROM audit a JOIN users u ON u.id=a.actor_id
-        WHERE (a.entity_id=? AND a.action IN ('ACCESS_INTENT_SUBMITTED','SIM_TIDE_DECRYPT','SIM_TIDE_DECRYPT_DENIED'))
+        WHERE (a.entity_id=? AND a.action IN ('ACCESS_INTENT_SUBMITTED','SIM_TIDE_DECRYPT','SIM_TIDE_DECRYPT_DENIED','SIM_EMERGENCY_REQUESTED'))
         OR (a.action IN ('SIM_TIDE_APPROVAL','SIM_TIDE_QUORUM_COMMITTED') AND a.entity_id IN (SELECT id FROM access_requests WHERE record_id=?))
+        OR (a.action IN ('SIM_EMERGENCY_APPROVAL','SIM_EMERGENCY_COMMITTED','SIM_EMERGENCY_ENDED') AND a.entity_id IN (SELECT id FROM sim_emergency WHERE record_id=?))
         ORDER BY a.created_at DESC,a.id LIMIT 200`,
+        r.id,
         r.id,
         r.id,
       )
@@ -305,6 +455,7 @@ export class SimFabric {
 }
 
 const sessionInput = z.object({ userId: S.uuid }).strict();
+const emergencyInput = z.object({ reason: z.string().trim().min(10).max(500) }).strict();
 const Id = () => Param('id', new ParseUUIDPipe({ version: '4' }));
 
 @ApiTags('Simulated TideCloak')
@@ -341,6 +492,22 @@ export class SimController {
   @ApiOperation({ summary: 'SIMULATED: whether the caller can decrypt, plus quorum state of requests' })
   access(@Req() r: AuthRequest, @Id() id: string) {
     return this.fabric.status(r.principal, id);
+  }
+  @Post('records/:id/emergency-requests')
+  @ApiOperation({ summary: 'SIMULATED: treating doctor requests time-limited break-glass access; still needs 2 of 3 admins' })
+  @S.DocumentBody(emergencyInput)
+  requestEmergency(@Req() r: AuthRequest, @Id() id: string, @S.BodySchema(emergencyInput) b: any) {
+    return this.fabric.requestEmergency(r.principal, id, b);
+  }
+  @Post('emergency-requests/:id/approve')
+  @ApiOperation({ summary: 'SIMULATED: one independent admin approval of a break-glass request' })
+  approveEmergency(@Req() r: AuthRequest, @Id() id: string) {
+    return this.fabric.approveEmergency(r.principal, id);
+  }
+  @Post('emergency-requests/:id/end')
+  @ApiOperation({ summary: 'SIMULATED: patient or requesting doctor ends break-glass access early' })
+  endEmergency(@Req() r: AuthRequest, @Id() id: string) {
+    return this.fabric.endEmergency(r.principal, id);
   }
   @Get('records/:id/access-log')
   @ApiOperation({ summary: 'SIMULATED: owner/admin transparency log of shares, approvals and decrypt attempts' })

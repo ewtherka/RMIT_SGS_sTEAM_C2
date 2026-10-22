@@ -60,6 +60,23 @@ Private calls use `Authorization: Bearer <accessToken>` (no DPoP in simulated mo
 
 `AccessRequest` = `{id, recordId, recordTitle, doctorId, doctorName, intent:"GRANT"|"REVOKE", status:"PENDING_TIDE"|"COMMITTED", approvals:[{adminId, displayName, approvedAt}], quorum:{threshold, of, reached}, createdAt, enforcedBy}`.
 
+### Break-glass emergency access
+
+For when the patient cannot share a record themselves (for example, unconscious in the emergency room). Emergency access does not bypass Emergent Authority: it still needs 2 of 3 independent admins, it expires after 60 minutes, it covers one record only, and the patient sees it and can end it.
+
+| Method | Path | Who | Response |
+| --- | --- | --- | --- |
+| POST | `/v1/sim/records/:id/emergency-requests` | doctor with an active appointment for this patient | body `{reason}` (10–500 characters) → `EmergencyRequest`. Errors: `404` if the doctor has no relationship to the record; `400 NO_CARE_RELATIONSHIP`; `409 ALREADY_AUTHORIZED` if the doctor can already read; `409 EMERGENCY_OPEN` if a request is already pending or active |
+| GET | `/v1/sim/approvals` | admin | gains the field `emergencyItems:[EmergencyRequest]` (pending); `items` is unchanged |
+| POST | `/v1/sim/emergency-requests/:id/approve` | admin | `EmergencyRequest`; reaching 2/3 sets `COMMITTED` and `expiresAt` = now + 60 min; `409 ALREADY_APPROVED` / `REQUEST_CLOSED` |
+| POST | `/v1/sim/emergency-requests/:id/end` | patient owner or the requesting doctor | `EmergencyRequest` with `status:"ENDED"`; works on pending or active requests |
+
+`EmergencyRequest` = `{id, recordId, recordTitle, doctorId, doctorName, reason, status:"PENDING_TIDE"|"COMMITTED"|"EXPIRED"|"ENDED", durationMinutes:60, expiresAt|null, approvals:[...], quorum:{threshold, of, reached}, createdAt, enforcedBy}`.
+
+- While active, `decrypt` returns `allowedBy:"EMERGENCY_QUORUM_GRANT"`. After expiry or ending, it returns `403`.
+- `GET /v1/sim/records/:id/access` gains `emergencies:[EmergencyRequest]`: all of them for the owner and admins, only their own for a doctor.
+- `access-log` gains `SIM_EMERGENCY_REQUESTED` (`details.reason`), `SIM_EMERGENCY_APPROVAL`, `SIM_EMERGENCY_COMMITTED` and `SIM_EMERGENCY_ENDED` (`details.by:"PATIENT"|"DOCTOR"`).
+
 The patient still creates requests with the existing `POST /v1/records/:id/access-requests {doctorId, intent}`. A `GRANT` requires an active appointment with that doctor, so book first.
 
 ### Seed identities
@@ -82,4 +99,6 @@ The patient still creates requests with the existing `POST /v1/records/:id/acces
 6. The patient opens the access log and sees Lan's denied attempt, both approvals and Lan's successful read.
 7. Message: the clinic's admins, its database and its AI cannot unlock a patient's record alone.
 
-Automated proof: `npm test` includes `test/simulation.test.ts`. It covers forged-token rejection, 404 scoping, admin-cannot-read, the 1/2 → 2/2 quorum path, a one-record-only grant, revoke after quorum and the access log.
+Optional extra scene (break-glass): BS. Lan sends an emergency request with a reason. Admin 1 approves and Lan is still denied. Admin 2 approves, giving Lan 60 minutes on that one record. The patient sees the request and its reason, then presses "end" and Lan is locked out again.
+
+Automated proof: `npm test` includes `test/simulation.test.ts`. It covers forged-token rejection, 404 scoping, admin-cannot-read, the 1/2 → 2/2 quorum path, a one-record-only grant, revoke after quorum, the access log, and break-glass (quorum, single record, ended by the patient, automatic expiry).
