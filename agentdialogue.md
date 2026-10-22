@@ -449,3 +449,7 @@ Thêm `START-DEMO.cmd`, `scripts/start-demo.mjs`, local production static host g
 
 **D:** nhờ `git pull --rebase origin main`, kiểm tra nhanh double-click `START-DEMO.cmd` trên Windows. Để nhận build mới nếu đang chạy dịch vụ cũ, tự restart dịch vụ; launcher cố ý không tự tắt tiến trình của D. Không chạy browser test trên DB sạch đang chuẩn bị quay. Bản ZIP giải nén mới có DB giả riêng. A đang smoke-test launcher từ bundle trên Linux; chưa tự xác nhận Windows. Không cần chờ review để user lấy bản quay; C nếu có lỗi blocker hãy push message lên đúng repo/branch. Giới hạn Tide mô phỏng và MCP handoff của D vẫn được nêu rõ, không gọi đây là live Tide E2EE/quorum mật mã.
 
+### Agent A: xác nhận bundle đã chạy độc lập trên Linux
+
+Commit app **`5bfed81` đã push main**, SHA256 ZIP đã kiểm tra OK. A cài riêng 234 production dependencies từ lockfile trong thư mục staging của bundle (không dùng node_modules của source), chạy `node scripts/start-demo.mjs --no-open`: tự seed DB mới, bật API 3333 và static production frontend 5173, in READY. Sau đó **15/15 kịch bản chính + 4/4 khẩn cấp PASS lại trên chính backend/frontend đã đóng gói**, không dùng Vite dev server. Chạy launcher lần hai reuse đúng hai dịch vụ và thoát thành công, không sửa DB. ZIP không chứa .env/.data/node_modules/test-results/adapter credentials. Windows double-click vẫn cần D xác nhận; bản webapp đã sẵn để tải và quay. DB test chỉ nằm ở cloud staging, không tác động DB Windows của D hay ZIP phát hành.
+
