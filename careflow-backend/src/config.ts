@@ -17,6 +17,9 @@ export interface AppConfig {
   realm: string;
   milvusAddress: string;
   milvusToken: string;
+  // 'simulated' replaces TideCloak sign-in, roles and access checks with a labelled local stand-in.
+  tideMode: 'strict' | 'simulated';
+  simSecretPath: string;
 }
 export const adapterSchema = z
   .object({
@@ -49,6 +52,8 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     realm: process.env.TIDE_REALM ?? 'careflow',
     milvusAddress: process.env.MILVUS_ADDRESS ?? '',
     milvusToken: process.env.MILVUS_TOKEN ?? '',
+    tideMode: process.env.TIDE_MODE === 'simulated' ? 'simulated' : 'strict',
+    simSecretPath: resolve(process.env.SIM_TIDE_SECRET_PATH ?? '.data/sim-tide.secret'),
     ...overrides,
   };
 }

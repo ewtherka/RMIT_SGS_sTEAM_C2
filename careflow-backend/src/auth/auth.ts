@@ -9,6 +9,11 @@ import { ApiError, forbidden } from '../errors.js';
 import { verifyDpop } from './verifyDpop.js';
 
 export const Public = () => SetMetadata('careflow:public', true);
+// String token avoids an import cycle with simulation.ts, which provides it via useExisting.
+export const SIM_TIDE = 'CAREFLOW_SIM_TIDE';
+export interface SimVerifier {
+  verify(token: string): Promise<JWTPayload>;
+}
 export interface Principal {
   issuer: string;
   subject: string;
@@ -32,12 +37,37 @@ export class AuthGuard implements CanActivate {
     @Inject(CONFIG) private readonly config: AppConfig,
     @Inject(Database) private readonly db: Database,
     @Inject(Reflector) private readonly reflector: Reflector,
+    @Inject(SIM_TIDE) private readonly sim: SimVerifier,
   ) {
-    this.adapter = readAdapter(config.adapterPath);
+    this.adapter = config.tideMode === 'simulated' ? null : readAdapter(config.adapterPath);
+  }
+  // SIMULATED TideCloak: Bearer token with TideCloak-shaped claims, still verified server-side.
+  private async simulated(req: AuthRequest) {
+    const authz = req.headers.authorization;
+    if (!authz || !/^Bearer [^ ]+$/i.test(authz))
+      throw new ApiError(401, 'UNAUTHORIZED', 'Cần đăng nhập (TideCloak mô phỏng) qua /v1/sim/session.');
+    let claims: JWTPayload;
+    try {
+      claims = await this.sim.verify(authz.slice(7));
+    } catch {
+      throw new ApiError(401, 'UNAUTHORIZED', 'Token mô phỏng không hợp lệ hoặc đã hết hạn.');
+    }
+    const roles = ((claims.realm_access as { roles?: unknown })?.roles ?? []) as unknown[];
+    req.principal = {
+      issuer: claims.iss!,
+      subject: claims.sub!,
+      roles: roles.filter((x): x is string => typeof x === 'string' && x.startsWith('careflow-')),
+      groups: [],
+      tideUserKey: typeof claims.tideuserkey === 'string' ? claims.tideuserkey : undefined,
+      user: this.db.get('SELECT id,display_name,email,phone FROM users WHERE id=?', claims.sub!),
+    };
+    return true;
   }
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (this.reflector.getAllAndOverride('careflow:public', [context.getHandler(), context.getClass()]))
       return true;
+    if (this.config.tideMode === 'simulated')
+      return this.simulated(context.switchToHttp().getRequest<AuthRequest>());
     if (!this.adapter)
       throw new ApiError(
         503,

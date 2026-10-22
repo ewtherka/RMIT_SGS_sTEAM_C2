@@ -9,7 +9,8 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { CONFIG, loadConfig, readAdapter, type AppConfig } from './config.js';
 import { Database } from './database.js';
-import { AuthGuard, Public } from './auth/auth.js';
+import { AuthGuard, Public, SIM_TIDE } from './auth/auth.js';
+import { QUORUM, SIM_LABEL, SimController, SimFabric, SimTide } from './simulation.js';
 import { Access, Identity } from './identity.js';
 import { Scheduling } from './scheduling.js';
 import { Notifications } from './notifications.js';
@@ -30,6 +31,14 @@ class HealthController {
   }
   @Public() @Get('health/ready') ready() {
     this.db.get('SELECT 1');
+    if (this.config.tideMode === 'simulated')
+      return {
+        status: 'ready',
+        storage: 'sqlite',
+        tideAdapter: SIM_LABEL,
+        tideNetworkProof: 'SIMULATED',
+        milvus: this.config.milvusAddress ? 'OPTIONAL_CONFIGURED' : 'DISABLED',
+      };
     const configured = Boolean(readAdapter(this.config.adapterPath));
     if (!configured)
       throw new ApiError(503, 'TIDE_NOT_CONFIGURED', 'SQLite sẵn sàng; đang chờ Tide enrolment và adapter.');
@@ -42,6 +51,20 @@ class HealthController {
     };
   }
   @Public() @Get('v1/auth/config') authConfig() {
+    if (this.config.tideMode === 'simulated')
+      return {
+        configured: true,
+        mode: 'SIMULATED',
+        label: SIM_LABEL,
+        adapter: null,
+        apiOrigin: this.config.publicUrl,
+        allowedOrigins: this.config.origins,
+        dpopRequired: false,
+        tokenType: 'Bearer',
+        identitiesPath: '/v1/sim/identities',
+        sessionPath: '/v1/sim/session',
+        quorum: QUORUM,
+      };
     const adapter = readAdapter(this.config.adapterPath);
     return {
       configured: Boolean(adapter),
@@ -70,9 +93,12 @@ class AppModule {
   static configure(config: AppConfig): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, ...Object.values(C)],
+      controllers: [HealthController, ...Object.values(C), SimController],
       providers: [
         { provide: CONFIG, useValue: config },
+        SimTide,
+        SimFabric,
+        { provide: SIM_TIDE, useExisting: SimTide },
         Database,
         Access,
         Identity,
