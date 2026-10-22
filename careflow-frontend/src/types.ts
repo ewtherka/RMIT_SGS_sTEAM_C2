@@ -98,12 +98,28 @@ export interface SimApproval {
   enforcedBy: string;
 }
 export interface SimAccess {
+  emergencies?: EmergencyRequest[];
   recordId: string;
   canDecrypt: boolean;
   allowedBy: string | null;
   grantedDoctorIds: string[];
   requests: SimApproval[];
   quorum: { threshold: number; of: number };
+}
+export interface EmergencyRequest {
+  id: string;
+  recordId: string;
+  recordTitle: string;
+  doctorId: string;
+  doctorName: string;
+  reason: string;
+  status: "PENDING_TIDE" | "COMMITTED" | "EXPIRED" | "ENDED";
+  durationMinutes: number;
+  expiresAt: string | null;
+  approvals: { adminId: string; displayName: string; approvedAt: string }[];
+  quorum: { threshold: number; of: number; reached: boolean };
+  createdAt: string;
+  enforcedBy: string;
 }
 export interface Page<T> {
   items: T[];

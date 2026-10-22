@@ -11,6 +11,8 @@ React + TypeScript + Vite. Vietnamese patient, clinician and independent-admin w
 
 ## Demo
 
+Ready-to-record bundle and Windows launcher: [DEMO.md](../DEMO.md).
+
 Patient → book BS. Lan → Lan opens a record and is denied → patient submits a sharing request → admin 1 approves, still denied → admin 2 approves → Lan can open that record. A second record remains closed. Repeat with REVOKE to demonstrate withdrawal after two independent approvals.
 
 Use **Đổi tài khoản** in the visible simulation banner for the separate demo identities. Each admin can approve once. Admins do not gain record-reading rights from their role. All changes are made by backend endpoints; the UI never grants permissions by itself.
@@ -19,6 +21,8 @@ Also implemented: service/doctor search, current availability, booking confirmat
 
 In **Quyền riêng tư**, choose **Xem lịch sử truy cập** for a record to see the patient's server audit trail, including denied decrypt attempts and quorum decisions. [Tide placement plan](TIDE_PLAN.md) explains the current simulation and the real integration boundaries.
 
+Emergency access is also server-backed: an actively assigned doctor supplies a reason, two independent admins approve a 60-minute, single-record grant, and the patient can end it immediately. Reasons, expiry and emergency audit events are visible; there is no admin/master-key bypass. This is a simulated API policy, not live Tide cryptography.
+
 ## Checks
 
 ```sh
@@ -26,6 +30,7 @@ npm test
 npm run build
 # With the API and Vite running:
 npm run test:browser
+npm run test:emergency
 ```
 
 Browser tests use Playwright. Run `npx playwright install chromium` once, or set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to an existing Chromium executable.

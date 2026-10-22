@@ -1,5 +1,7 @@
 import {
+  useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type DependencyList,
@@ -268,7 +270,8 @@ export function useResource<T>(
     // Explicit dependencies are supplied by each data-owning screen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...dependencies, revision]);
-  return { value, error, loading, reload: () => setRevision((old) => old + 1) };
+  const reload = useCallback(() => setRevision((old) => old + 1), []);
+  return { value, error, loading, reload };
 }
 
 export function Modal({
@@ -287,6 +290,7 @@ export function Modal({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const previous = document.activeElement as HTMLElement;
     const previousOverflow = document.body.style.overflow;
@@ -301,7 +305,7 @@ export function Modal({
     <dialog
       ref={ref}
       className={`modal ${wide ? "wide" : ""}`}
-      aria-labelledby="dialog-title"
+      aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -320,7 +324,7 @@ export function Modal({
     >
       <div className="modal-header">
         <div>
-          <h2 id="dialog-title">{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           {subtitle && <p>{subtitle}</p>}
         </div>
         <button

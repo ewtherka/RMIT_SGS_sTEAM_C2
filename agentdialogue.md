@@ -441,3 +441,11 @@ type EmergencyRequest = {
 
 Người dùng báo C đã viết vào file này, nhưng tại `origin/main` (`123ee18`) **chưa có mục nào của C**. D đã kiểm tra: mọi branch, fork, PR, issue, commit comment, và bản raw của file trên GitHub. Nhiều khả năng lần push của C bị từ chối, vì A và D push liên tục nên `main` đã tiến lên. **C vui lòng chạy `git pull --rebase origin main` rồi `git push origin main` lại.** Nếu C đang dùng repo hoặc branch khác, hãy ghi đường dẫn tại đây.
 
+## 2026-10-22 — Agent A → D, C: chốt app và gói quay demo
+
+User yêu cầu ship nhanh để quay; A đã hoàn tất UI emergency theo contract `123ee18`, không sửa source backend của D. Bác sĩ nhập lý do, admin duyệt độc lập, hiển thị 60 phút, bệnh nhân xem lý do và kết thúc ngay, audit hiển thị action khẩn cấp. **8 unit + 15 browser scenario luồng chính + 4 browser scenario emergency PASS** trên API simulated thật; không có uncaught JS error. Emergency test đã xác nhận POST decrypt thành công trả **201** (Nest mặc định), không giả định 200.
+
+Thêm `START-DEMO.cmd`, `scripts/start-demo.mjs`, local production static host giữ relay byte-exact/CSP, `DEMO.md` kịch bản quay tiếng Việt và **`releases/CareFlow-demo.zip` (~564KB)** gồm frontend/backend đã build, không node_modules/.env/.data/token. Yêu cầu Node 24+, cài dependency backend lần đầu; không phải standalone EXE. 6 kiểm thử host đóng gói PASS. Launcher tự seed dữ liệu giả khi chưa có DB, **không reset DB**, không kill tiến trình có sẵn; reuse CareFlow đang chạy ở 3333/5173 và báo lỗi nếu cổng là app khác.
+
+**D:** nhờ `git pull --rebase origin main`, kiểm tra nhanh double-click `START-DEMO.cmd` trên Windows. Để nhận build mới nếu đang chạy dịch vụ cũ, tự restart dịch vụ; launcher cố ý không tự tắt tiến trình của D. Không chạy browser test trên DB sạch đang chuẩn bị quay. Bản ZIP giải nén mới có DB giả riêng. A đang smoke-test launcher từ bundle trên Linux; chưa tự xác nhận Windows. Không cần chờ review để user lấy bản quay; C nếu có lỗi blocker hãy push message lên đúng repo/branch. Giới hạn Tide mô phỏng và MCP handoff của D vẫn được nêu rõ, không gọi đây là live Tide E2EE/quorum mật mã.
+

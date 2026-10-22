@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSession } from "./session-context";
 import { dateText, timeText } from "./utils";
 import type { SimApproval } from "./types";
+import { EmergencyApprovals, EmergencyPanel } from "./Emergency";
 import {
   Badge,
   Empty,
@@ -73,6 +74,13 @@ export function SharingProgress({
   );
   return (
     <div className="sim-sharing-progress">
+      {resource.value && !resource.loading && !resource.error && (
+        <EmergencyPanel
+          recordId={recordId}
+          access={resource.value}
+          refresh={resource.reload}
+        />
+      )}
       {resource.loading ? (
         <Loading label="Đang tải trạng thái quorum…" />
       ) : resource.error ? (
@@ -113,6 +121,10 @@ function AccessHistory({ recordId }: { recordId: string }) {
     SIM_TIDE_QUORUM_COMMITTED: "Đủ quorum · Thực thi mô phỏng",
     SIM_TIDE_DECRYPT: "Được phép mở hồ sơ",
     SIM_TIDE_DECRYPT_DENIED: "Bị từ chối mở hồ sơ",
+    SIM_EMERGENCY_REQUESTED: "Gửi yêu cầu truy cập khẩn cấp",
+    SIM_EMERGENCY_APPROVAL: "Phê duyệt khẩn cấp · Một phiếu",
+    SIM_EMERGENCY_COMMITTED: "Đủ quorum · Quyền khẩn cấp 60 phút",
+    SIM_EMERGENCY_ENDED: "Đã kết thúc quyền khẩn cấp",
   };
   return (
     <section className="access-history" aria-label="Lịch sử truy cập hồ sơ">
@@ -149,6 +161,7 @@ function AccessHistory({ recordId }: { recordId: string }) {
                 {labels[item.action] || "Cập nhật quyền truy cập"}
               </strong>
               <p>{item.actorName}</p>
+              {item.details?.reason && <p>{item.details.reason}</p>}
             </div>
             <time dateTime={item.at}>
               {timeText(item.at)}
@@ -170,23 +183,32 @@ export function SimRecordAccess({ recordId }: { recordId: string }) {
   ) : resource.error ? (
     <ErrorBox error={resource.error} retry={resource.reload} />
   ) : (
-    <div
-      className={`sim-record-access ${resource.value?.canDecrypt ? "allowed" : "denied"}`}
-    >
-      <Icon name={resource.value?.canDecrypt ? "shield" : "lock"} />
-      <div>
-        <strong>
-          {resource.value?.canDecrypt
-            ? "Policy mô phỏng cho phép tài khoản này"
-            : "Chưa có quyền đọc nội dung hồ sơ"}
-        </strong>
-        <p>
-          {resource.value?.canDecrypt
-            ? "Nội dung chỉ được tải sau khi máy chủ kiểm tra lại yêu cầu mở."
-            : "Có phân công khám không tự cấp quyền. Cần bệnh nhân yêu cầu chia sẻ và đủ 2 admin độc lập phê duyệt."}
-        </p>
+    <>
+      <div
+        className={`sim-record-access ${resource.value?.canDecrypt ? "allowed" : "denied"}`}
+      >
+        <Icon name={resource.value?.canDecrypt ? "shield" : "lock"} />
+        <div>
+          <strong>
+            {resource.value?.canDecrypt
+              ? "Policy mô phỏng cho phép tài khoản này"
+              : "Chưa có quyền đọc nội dung hồ sơ"}
+          </strong>
+          <p>
+            {resource.value?.canDecrypt
+              ? "Nội dung chỉ được tải sau khi máy chủ kiểm tra lại yêu cầu mở."
+              : "Có phân công khám không tự cấp quyền. Cần bệnh nhân yêu cầu chia sẻ và đủ 2 admin độc lập phê duyệt."}
+          </p>
+        </div>
       </div>
-    </div>
+      {resource.value && (
+        <EmergencyPanel
+          recordId={recordId}
+          access={resource.value}
+          refresh={resource.reload}
+        />
+      )}
+    </>
   );
 }
 export default function Governance({
@@ -256,6 +278,13 @@ export default function Governance({
           <small>ADMIN ĐỘC LẬP</small>
         </div>
       </section>
+      {!resource.loading && !resource.error && (
+        <EmergencyApprovals
+          items={resource.value?.emergencyItems || []}
+          refresh={resource.reload}
+          notify={notify}
+        />
+      )}
       {resource.loading ? (
         <Loading />
       ) : resource.error ? (
@@ -293,7 +322,7 @@ export default function Governance({
             );
           })}
         </div>
-      ) : (
+      ) : resource.value?.emergencyItems?.length ? null : (
         <Empty
           icon="shield"
           title="Không có yêu cầu đang chờ"

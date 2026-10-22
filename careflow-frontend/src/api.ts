@@ -115,6 +115,21 @@ export function createApi(
       headers: { "Idempotency-Key": key },
     });
   return {
+    requestEmergency: (id: string, reason: string) =>
+      request<import("./types").EmergencyRequest>(
+        `/v1/sim/records/${encodeURIComponent(id)}/emergency-requests`,
+        { method: "POST", body: JSON.stringify({ reason }) },
+      ),
+    approveEmergency: (id: string) =>
+      request<import("./types").EmergencyRequest>(
+        `/v1/sim/emergency-requests/${encodeURIComponent(id)}/approve`,
+        { method: "POST" },
+      ),
+    endEmergency: (id: string) =>
+      request<import("./types").EmergencyRequest>(
+        `/v1/sim/emergency-requests/${encodeURIComponent(id)}/end`,
+        { method: "POST" },
+      ),
     simAccessLog: (id: string) =>
       request<{
         recordId: string;
@@ -123,6 +138,7 @@ export function createApi(
           actorId: string;
           actorName: string;
           at: string;
+          details?: { reason?: string };
         }[];
       }>(`/v1/sim/records/${encodeURIComponent(id)}/access-log`),
     simIdentities: () =>
@@ -137,6 +153,7 @@ export function createApi(
       request<{
         quorum: { threshold: number; of: number };
         items: import("./types").SimApproval[];
+        emergencyItems?: import("./types").EmergencyRequest[];
       }>("/v1/sim/approvals"),
     simApprove: (id: string) =>
       request<import("./types").SimApproval>(

@@ -36,6 +36,8 @@ Booking, rescheduling and slot conflicts run on a NestJS API with synthetic data
 
 Requires Node.js 24+. Run both services on the same machine.
 
+**Ready-to-record demo:** download [CareFlow-demo.zip](releases/CareFlow-demo.zip), extract it and double-click **START-DEMO.cmd** (Windows, Node.js 24+; Internet needed for the first dependency install). Both services start automatically in simulated mode. [Vietnamese recording guide](DEMO.md). This is a local web app, not a standalone executable.
+
 Frontend: from `careflow-frontend/`, run `npm ci` then `npm run dev` (port 5173). Default mode uses the simulated backend at port 3333. See [frontend setup and demo](careflow-frontend/README.md).
 
 Backend: from `careflow-backend/`:

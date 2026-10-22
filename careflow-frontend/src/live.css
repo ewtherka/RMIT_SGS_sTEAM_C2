@@ -1717,3 +1717,121 @@
     padding: 9px 10px;
   }
 }
+.emergency-panel,
+.emergency-entry {
+  padding: 18px;
+  margin: 16px 0;
+  border: 1px solid #ead8ba;
+  border-radius: 16px;
+  background: #fffaf1;
+}
+.emergency-panel.active {
+  border-color: #eab8b4;
+  background: #fff5f4;
+}
+.emergency-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  color: #a04436;
+  margin-bottom: 12px;
+}
+.emergency-summary .section-heading {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.emergency-summary blockquote {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-left: 3px solid #d8aa74;
+  background: #ffffff99;
+  border-radius: 0 8px 8px 0;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.emergency-meta {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  color: #7e6654;
+  font-size: 11px;
+  margin-bottom: 12px;
+}
+.emergency-meta span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.emergency-meta .icon {
+  width: 14px;
+  height: 14px;
+}
+.emergency-entry strong {
+  font-size: 13px;
+}
+.emergency-entry p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #806e5e;
+  margin: 8px 0 12px;
+}
+.emergency-entry .button {
+  white-space: normal;
+  text-align: left;
+}
+.emergency-past {
+  font-size: 12px;
+  margin: 14px 0;
+}
+.emergency-past summary {
+  cursor: pointer;
+  color: var(--muted, #64748b);
+  padding: 8px 0;
+}
+.emergency-past .emergency-summary {
+  padding: 12px;
+  border: 1px solid #e4e8ed;
+  border-radius: 12px;
+  margin-top: 8px;
+}
+.emergency-approvals {
+  margin-bottom: 24px;
+}
+.emergency-approvals > .section-heading {
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.emergency-approvals h2 {
+  font-size: 21px;
+  margin: 8px 0;
+}
+.emergency-approval-card {
+  border-color: #ead8ba;
+  padding: 24px;
+}
+.emergency-approval-card h3 {
+  margin: 0 0 16px;
+}
+.field-label textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #d8e1e9;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.reason-count {
+  display: block;
+  text-align: right;
+  color: #718096;
+  margin: 8px 0 16px;
+}
