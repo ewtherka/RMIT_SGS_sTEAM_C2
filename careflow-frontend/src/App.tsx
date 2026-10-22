@@ -553,8 +553,13 @@ function Overview({
         title={
           <>
             Chào{" "}
-            {session.me?.displayName?.replace(/\([^)]*\)/g, '').trim().split(" ").slice(-2).join(" ") || "bạn"},{" "}
-            <span className="greeting-sun">✳</span>
+            {session.me?.displayName
+              ?.replace(/\([^)]*\)/g, "")
+              .trim()
+              .split(" ")
+              .slice(-2)
+              .join(" ") || "bạn"}
+            , <span className="greeting-sun">✳</span>
           </>
         }
         text="Một ngày tốt lành bắt đầu từ việc quan tâm đến bản thân."

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSession } from "./session-context";
-import { dateText } from "./utils";
+import { dateText, timeText } from "./utils";
 import type { SimApproval } from "./types";
 import {
   Badge,
@@ -66,6 +66,7 @@ export function SharingProgress({
   revision?: number;
 }) {
   const session = useSession();
+  const [showHistory, setShowHistory] = useState(false);
   const resource = useResource(
     () => session.api.simAccess(recordId),
     [session.api, recordId, revision],
@@ -89,7 +90,76 @@ export function SharingProgress({
         <Icon name="refresh" />
         Cập nhật trạng thái
       </button>
+      <button
+        className="text-button access-log-button"
+        onClick={() => setShowHistory((old) => !old)}
+      >
+        <Icon name="activity" />
+        {showHistory ? "Ẩn lịch sử truy cập" : "Xem lịch sử truy cập"}
+      </button>
+      {showHistory && <AccessHistory recordId={recordId} />}
     </div>
+  );
+}
+function AccessHistory({ recordId }: { recordId: string }) {
+  const { api } = useSession();
+  const resource = useResource(
+    () => api.simAccessLog(recordId),
+    [api, recordId],
+  );
+  const labels: Record<string, string> = {
+    ACCESS_INTENT_SUBMITTED: "Gửi yêu cầu thay đổi quyền",
+    SIM_TIDE_APPROVAL: "Phê duyệt một phiếu",
+    SIM_TIDE_QUORUM_COMMITTED: "Đủ quorum · Thực thi mô phỏng",
+    SIM_TIDE_DECRYPT: "Được phép mở hồ sơ",
+    SIM_TIDE_DECRYPT_DENIED: "Bị từ chối mở hồ sơ",
+  };
+  return (
+    <section className="access-history" aria-label="Lịch sử truy cập hồ sơ">
+      <div className="section-heading">
+        <h3>Lịch sử truy cập</h3>
+        <button className="text-button" onClick={resource.reload}>
+          <Icon name="refresh" />
+          Cập nhật
+        </button>
+      </div>
+      {resource.loading ? (
+        <Loading />
+      ) : resource.error ? (
+        <ErrorBox error={resource.error} retry={resource.reload} />
+      ) : resource.value?.items.length ? (
+        resource.value.items.map((item, index) => (
+          <div
+            className={`access-event ${item.action.endsWith("DENIED") ? "denied" : ""}`}
+            key={`${item.actorId}-${item.at}-${index}`}
+          >
+            <span>
+              <Icon
+                name={
+                  item.action.endsWith("DENIED")
+                    ? "lock"
+                    : item.action === "SIM_TIDE_APPROVAL"
+                      ? "check"
+                      : "shield"
+                }
+              />
+            </span>
+            <div>
+              <strong>
+                {labels[item.action] || "Cập nhật quyền truy cập"}
+              </strong>
+              <p>{item.actorName}</p>
+            </div>
+            <time dateTime={item.at}>
+              {timeText(item.at)}
+              <small>{dateText(item.at)}</small>
+            </time>
+          </div>
+        ))
+      ) : (
+        <p className="inline-hint">Chưa có hoạt động trên tài liệu này.</p>
+      )}
+    </section>
   );
 }
 export function SimRecordAccess({ recordId }: { recordId: string }) {

@@ -17,6 +17,8 @@ Use **Đổi tài khoản** in the visible simulation banner for the separate de
 
 Also implemented: service/doctor search, current availability, booking confirmation, reschedule, cancellation, attendance confirmation, visit history, clinician-requested follow-ups, profile editing and simulated notifications. Booking mutations preserve their idempotency key on retry and use the server's `version`.
 
+In **Quyền riêng tư**, choose **Xem lịch sử truy cập** for a record to see the patient's server audit trail, including denied decrypt attempts and quorum decisions. [Tide placement plan](TIDE_PLAN.md) explains the current simulation and the real integration boundaries.
+
 ## Checks
 
 ```sh
@@ -27,6 +29,8 @@ npm run test:browser
 ```
 
 Browser tests use Playwright. Run `npx playwright install chromium` once, or set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to an existing Chromium executable.
+
+Run browser tests against a dedicated synthetic backend database. They create and cancel demo appointments, request/approve sharing and revocation, and leave audit entries. They clean up only appointments created by their own run; they do not reset the database.
 
 ## Real Tide mode
 

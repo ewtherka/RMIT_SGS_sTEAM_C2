@@ -1011,7 +1011,9 @@ function SharingPage({ catalog, notify }: Props) {
             chứng tại Tide sau khi hoàn tất chính sách quản trị.
           </p>
         </div>
-        <Badge color="gray">CHƯA XÁC MINH</Badge>
+        <Badge color="gray">
+          {session.mode === "simulation" ? "QUORUM MÔ PHỎNG" : "CHƯA XÁC MINH"}
+        </Badge>
       </div>
       {resource.loading ? (
         <Loading />
@@ -1026,7 +1028,11 @@ function SharingPage({ catalog, notify }: Props) {
                   <span className="record-type">TÀI LIỆU ĐÃ CÔNG BỐ</span>
                   <h2>{item.title}</h2>
                 </div>
-                <Badge color="gray">Quyền chưa xác minh</Badge>
+                <Badge color="gray">
+                  {session.mode === "simulation"
+                    ? "Quorum 2/3 · Mô phỏng"
+                    : "Quyền chưa xác minh"}
+                </Badge>
               </div>
               {session.mode === "simulation" ? (
                 <SharingProgress

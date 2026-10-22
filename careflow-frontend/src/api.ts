@@ -115,6 +115,16 @@ export function createApi(
       headers: { "Idempotency-Key": key },
     });
   return {
+    simAccessLog: (id: string) =>
+      request<{
+        recordId: string;
+        items: {
+          action: string;
+          actorId: string;
+          actorName: string;
+          at: string;
+        }[];
+      }>(`/v1/sim/records/${encodeURIComponent(id)}/access-log`),
     simIdentities: () =>
       request<import("./types").SimIdentity[]>("/v1/sim/identities", {}, false),
     simLogin: (userId: string) =>
@@ -257,6 +267,7 @@ export type Api = ReturnType<typeof createApi>;
 export const publicApi = createApi();
 
 export function errorMessage(error: unknown): string {
+  if (typeof error === "string") return error;
   if (error instanceof ApiError) {
     const messages: Record<string, string> = {
       SLOT_UNAVAILABLE: "Khung giờ vừa được đặt. Vui lòng chọn giờ khác.",

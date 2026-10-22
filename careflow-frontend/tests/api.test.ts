@@ -1,9 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
-import { createApi } from "../src/api";
+import { createApi, errorMessage } from "../src/api";
 import { canAttend, canPatientChange, dateText, timeText } from "../src/utils";
 import type { Appointment } from "../src/types";
 
 describe("API contract and session boundary", () => {
+  it("preserves readable setup errors instead of replacing them with generic failures", () => {
+    expect(errorMessage("Back-end chưa bật TIDE_MODE=simulated")).toBe(
+      "Back-end chưa bật TIDE_MODE=simulated",
+    );
+  });
   it("never calls private HTTP routes without an authenticated transport", async () => {
     const http = vi.fn();
     const api = createApi(undefined, "http://api.test", http);
