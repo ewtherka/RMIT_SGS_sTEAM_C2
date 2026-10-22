@@ -1,0 +1,10 @@
+* text=auto
+*.sh text eol=lf
+*.ts text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf
+careflow-backend/public/tide_dpop_auth.html -text
+careflow-backend/assets/tide_dpop_auth.html -text

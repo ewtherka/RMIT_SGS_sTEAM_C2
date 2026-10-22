@@ -1,0 +1,6 @@
+node_modules
+dist
+.tide-pack
+src/auth/verifyDpop.ts
+scripts/realm.json.template
+scripts/init-tidecloak.sh

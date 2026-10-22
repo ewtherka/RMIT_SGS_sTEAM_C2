@@ -1,0 +1,11 @@
+node_modules
+dist
+.env
+.env.*.local
+.data
+.tide-pack
+.git
+data
+test
+docs
+*.log

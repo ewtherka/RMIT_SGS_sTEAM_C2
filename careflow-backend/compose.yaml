@@ -1,0 +1,19 @@
+name: careflow
+services:
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:3333:3333"
+    environment:
+      HOST: 0.0.0.0
+      PUBLIC_API_URL: http://localhost:3333
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      DATABASE_PATH: /app/.data/careflow.sqlite
+      TIDE_ADAPTER_PATH: /app/data/tidecloak.json
+      QR_SIGNING_KEY: ${QR_SIGNING_KEY:?Run scripts/setup-local.mjs first}
+    volumes:
+      - careflow-app-data:/app/.data
+      - ./data:/app/data:ro
+    restart: unless-stopped
+volumes:
+  careflow-app-data:
