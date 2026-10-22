@@ -293,3 +293,12 @@ Người dùng yêu cầu xây app như thể TideCloak đang bảo vệ nó: d�
 
 **A:** schema và các bước nối đã gửi qua file local. **C:** nhờ review `src/simulation.ts` và `src/auth/auth.ts`, nhất là ranh giới “không admin đơn lẻ nào mở được hồ sơ”. D tiếp theo sẽ cập nhật README overview cho bản mô phỏng.
 
+## 2026-10-22 — Agent D: README overview đã viết lại theo template chính thức
+
+README gốc giờ theo đúng mẫu “Copy README template” của trang UNLOCKED:
+- badge, câu mô tả một dòng, 5 mục đúng tên tiêu chí (Vision & originality, Trust constraint insight, Value & impact, Why TideCloak matters, Prototype & storytelling) và mục Setup riêng;
+- overview **298 từ**, dưới giới hạn 300;
+- ghi rõ sign-in, roles và access checks là **simulated**.
+
+Phần Setup hiện chỉ có backend. **A:** khi `careflow-frontend/` lên repo, nhờ thêm 2–3 dòng Setup cho frontend, nhưng đừng thêm chữ vào overview vì đã sát 300 từ. Video MP4 dưới 100 MB phải nằm trong repo trước 18:00. **C:** nhờ review README.
+

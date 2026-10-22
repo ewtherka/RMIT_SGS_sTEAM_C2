@@ -1,25 +1,47 @@
-# RMIT_SGS_sTEAM_C2 — CareFlow
+[![Built with TideCloak](https://tide.org/badges/built-with-tidecloak.svg)](https://tide.org/tidecloak?utm_source=github&utm_medium=readme&utm_campaign=unlocked)
 
-## Vision & originality (25%)
+## Project overview
 
-CareFlow helps patients choose appointments, manage changes, revisit published results and book clinician-requested follow-ups. Patients select individual records to share when continuing care with another doctor. The frontend belongs to the team; this repository implements the API.
+CareFlow lets patients book clinic visits and share one medical record at a time with a new doctor, while no single administrator, clinic or AI can unlock that record alone.
 
-## Trust constraint insight (20%)
+Built with [TideCloak](https://tide.org/tidecloak?utm_source=github&utm_medium=readme&utm_campaign=unlocked).
 
-Clinic administrators should not be able to turn scheduling authority into unilateral access to medical records. Appointment ownership and clinical assignment govern API access; independently governed Tide policies must govern decryption. Database approval counters cannot replace that boundary.
+### 1. Vision & originality
 
-## Value & impact (20%)
+A patient-centred clinic app where booking a doctor and reading records are separate powers. Each record's access is a governed decision, not a database flag.
 
-Patients can reschedule without calling reception. Disrupted appointments require patient choice, and obsolete reminders are invalidated. Family delegation grants booking assistance without automatically granting medical access.
+### 2. Trust constraint insight
 
-## Why TideCloak matters (20%)
+Today a clinic admin, or anyone with database access, can read every record. Patients therefore cannot share selectively, and clinics must trust every insider. When access needs the patient's request plus independent approvals, a stolen admin account or rogue insider can no longer open records.
 
-The integration verifies embedded-key JWTs and sender-bound DPoP proofs. Record contents remain client-supplied ciphertext. Policy imports validate scope but do not sign policies or approve access. The intended cryptographic design uses `RelationshipAttestation:1` and an independently verified administrator quorum of at least two.
+### 3. Value & impact
 
-## Prototype & storytelling (15%)
+Patients reschedule without calling reception and share only what a new doctor needs. Example: Nguyễn An books BS. Lan for a follow-up. Lan reads last week's result only after An shares it and two independent admins approve, never An's whole history.
 
-The NestJS API includes OpenAPI, local Docker, SQLite transactions, synthetic seed data and automated integration tests. Milvus remains optional because the MVP contains no vector feature. Notifications and the rule-based booking assistant use no paid APIs.
+### 4. Why TideCloak matters
 
-**Current limit:** Tide licensing returned HTTP 500; real login, record encryption/decryption and MultiAdmin enforcement remain unverified. The submission video is not completed.
+TideCloak signs users in, and the server verifies the roles in its JWTs. Records are stored as ciphertext; policy and quorum-enforced governance decide who decrypts. CareFlow requires 2 of 3 independent admins to commit any access change, so authority emerges only when the patient's request and the quorum align. In this prototype, TideCloak's sign-in, roles and access checks are **simulated** (`TIDE_MODE=simulated`), as the brief permits. Strict mode verifies real TideCloak JWTs and DPoP proofs.
 
-[Setup](careflow-backend/docs/SETUP.md) · [Frontend API handoff](careflow-backend/docs/FRONTEND.md) · [Verification](careflow-backend/docs/VERIFICATION.md) · [OpenAPI](careflow-backend/docs/openapi.json)
+### 5. Prototype & storytelling
+
+Key interaction:
+1. BS. Lan has an appointment, yet is **denied** the record.
+2. An shares that one record with her.
+3. Admin 1 approves: still denied, and admin 1 cannot approve twice.
+4. Admin 2 approves. Quorum is reached and Lan decrypts the record.
+
+Booking, rescheduling and slot conflicts run on a NestJS API with synthetic data.
+
+## Setup
+
+Requires Node.js 24+. From `careflow-backend/`:
+
+```bash
+cp .env.example .env    # set TIDE_MODE=simulated and a random QR_SIGNING_KEY
+npm ci --ignore-scripts
+npm run seed
+npm start               # API on http://localhost:3333, Swagger at /docs
+node scripts/sim-demo.mjs   # runs the quorum storyline end to end
+```
+
+All data is synthetic. Details: [Simulated TideCloak](careflow-backend/docs/SIMULATED_TIDE.md) · [Setup with real TideCloak](careflow-backend/docs/SETUP.md) · [Frontend API handoff](careflow-backend/docs/FRONTEND.md) · [Verification](careflow-backend/docs/VERIFICATION.md) · [OpenAPI](careflow-backend/docs/openapi.json)
