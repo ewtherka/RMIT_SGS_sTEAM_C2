@@ -34,7 +34,11 @@ Booking, rescheduling and slot conflicts run on a NestJS API with synthetic data
 
 ## Setup
 
-Requires Node.js 24+. From `careflow-backend/`:
+Requires Node.js 24+. Run both services on the same machine.
+
+Frontend: from `careflow-frontend/`, run `npm ci` then `npm run dev` (port 5173). Default mode uses the simulated backend at port 3333. See [frontend setup and demo](careflow-frontend/README.md).
+
+Backend: from `careflow-backend/`:
 
 ```bash
 cp .env.example .env    # set TIDE_MODE=simulated and a random QR_SIGNING_KEY
